@@ -189,13 +189,28 @@ function DownloadModal({ platform, onClose, onDownloadComplete }) {
     const handleDownloadFile = useCallback(async (fileId, filename) => {
         const id = fileId || result?.file_id;
         const name = filename || result?.filename;
-        if (!id) return;
+        if (!id) {
+            console.error('[DownloadModal] No file_id available for download');
+            setStatus('saved'); // Still show saved so user can use manual button
+            return;
+        }
 
         try {
             setStatus('saving');
+            console.log('[DownloadModal] Starting download for file:', id, name);
+            
             // Descargar el archivo del servidor
-            const response = await fetch(downloadFile(id));
+            const fileUrl = downloadFile(id);
+            console.log('[DownloadModal] Fetching from URL:', fileUrl);
+            
+            const response = await fetch(fileUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+            }
+            
             const blob = await response.blob();
+            console.log('[DownloadModal] Blob received, size:', blob.size);
 
             if (saveFolder && hasFileSystemAccess) {
                 // Guardar en la carpeta seleccionada
@@ -210,22 +225,14 @@ function DownloadModal({ platform, onClose, onDownloadComplete }) {
                 setStatus('saved');
                 console.log(`✅ Archivo guardado en: ${saveFolderName}/${finalFilename}`);
             } else {
-                // Descarga normal del navegador
-                const downloadUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = name || `download.${format}`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(downloadUrl);
+                // Descarga del navegador - simplemente marcar como listo
+                // El usuario usará el botón explícito de descarga
+                console.log('[DownloadModal] No folder selected, user will download manually');
                 setStatus('saved');
             }
         } catch (err) {
-            console.error('Error saving file:', err);
-            setError('Error guardando archivo: ' + err.message);
-            // Fallback: descarga normal
-            window.open(downloadFile(id), '_blank');
+            console.error('[DownloadModal] Error saving file:', err);
+            // No mostrar error crítico, solo permitir descarga manual
             setStatus('saved');
         }
     }, [result, saveFolder, hasFileSystemAccess, saveFolderName, format]);
@@ -447,15 +454,27 @@ function DownloadModal({ platform, onClose, onDownloadComplete }) {
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mb-5 p-4 rounded-xl bg-green-900/30 border border-green-700/30 flex items-center gap-3"
+                        className="mb-5 p-4 rounded-xl bg-green-900/30 border border-green-700/30"
                     >
-                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
-                        <div className="flex-1">
-                            <p className="text-green-400 text-sm">¡Archivo guardado exitosamente!</p>
-                            <p className="text-gray-400 text-xs mt-1">
-                                {saveFolder ? `📁 ${saveFolderName}/${result?.filename}` : result?.filename}
-                            </p>
+                        <div className="flex items-center gap-3">
+                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                            <div className="flex-1">
+                                <p className="text-green-400 text-sm">¡Descarga completada!</p>
+                                <p className="text-gray-400 text-xs mt-1">{result?.filename}</p>
+                            </div>
                         </div>
+                        {/* Botón de descarga explícito */}
+                        <button
+                            onClick={() => {
+                                const fileUrl = downloadFile(result?.file_id);
+                                window.open(fileUrl, '_blank');
+                            }}
+                            className="w-full mt-3 py-3 px-4 rounded-xl bg-green-600 hover:bg-green-500 
+                                     text-white font-semibold flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <Download className="w-5 h-5" />
+                            Guardar en mi computadora
+                        </button>
                     </motion.div>
                 )}
 
